@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>انتخاب موقعیت روی نقشه - تاکسی دانشگاه</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .header {
+            background: #128C7E;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .controls {
+            padding: 15px;
+            background: white;
+            border-top: 2px solid #128C7E;
+        }
+        
+        .location-info {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #128C7E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .instruction {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="page-title">📍 انتخاب موقعیت روی نقشه</h1>
+            <p id="instruction">برای انتخاب موقعیت، روی نقشه کلیک کنید</p>
+        </div>
+        
+        <div class="map-container">
+            <div class="instruction" id="instruction-box">
+                ✨ روی نقشه کلیک کنید تا موقعیت انتخاب شود
+            </div>
+            <div id="map"></div>
+        </div>
+        
+        <div class="controls">
+            <div class="location-info">
+                <strong>موقعیت انتخابی:</strong>
+                <div id="selected-address">هنوز موقعیتی انتخاب نشده</div>
+                <div id="selected-coords" style="font-size: 12px; color: #666;"></div>
+            </div>
+            <button onclick="confirmSelection()" id="confirm-btn" disabled>✅ تایید موقعیت</button>
+            <button onclick="cancelSelection()" style="background: #dc3545; margin-top: 8px;">❌ انصراف</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // متغیرهای global
+        let map;
+        let selectedMarker = null;
+        let selectedLatLng = null;
+        let selectedAddress = "هنوز موقعیتی انتخاب نشده";
+        
+        // مقداردهی اولیه نقشه
+        function initMap() {
+            // ایجاد نقشه
+            map = L.map('map').setView([35.7036, 51.3515], 15);
+            
+            // اضافه کردن لایه نقشه
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            // رویداد کلیک روی نقشه
+            map.on('click', function(e) {
+                selectLocation(e.latlng);
+            });
+        }
+        
+        // انتخاب موقعیت روی نقشه
+        function selectLocation(latlng) {
+            // حذف marker قبلی
+            if (selectedMarker) {
+                map.removeLayer(selectedMarker);
+            }
+            
+            // ایجاد marker جدید
+            selectedMarker = L.marker(latlng).addTo(map)
+                .bindPopup('📍 موقعیت انتخابی شما')
+                .openPopup();
+            
+            selectedLatLng = latlng;
+            
+            // نمایش مختصات
+            document.getElementById('selected-coords').textContent = 
+                `عرض: ${latlng.lat.toFixed(6)}, طول: ${latlng.lng.toFixed(6)}`;
+            
+            // فعال کردن دکمه تایید
+            document.getElementById('confirm-btn').disabled = false;
+            
+            // دریافت آدرس
+            getAddressFromCoords(latlng.lat, latlng.lng);
+        }
+        
+        // دریافت آدرس از مختصات
+        function getAddressFromCoords(lat, lng) {
+            document.getElementById('selected-address').textContent = 'در حال دریافت آدرس...';
+            
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=fa`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.display_name) {
+                        selectedAddress = data.display_name;
+                        // خلاصه‌سازی آدرس
+                        const addressParts = selectedAddress.split(',').slice(0, 4).join(', ');
+                        document.getElementById('selected-address').textContent = addressParts;
+                    } else {
+                        selectedAddress = `موقعیت انتخابی (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                        document.getElementById('selected-address').textContent = selectedAddress;
+                    }
+                })
+                .catch(error => {
+                    console.error('خطا در دریافت آدرس:', error);
+                    selectedAddress = `موقعیت انتخابی (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                    document.getElementById('selected-address').textContent = selectedAddress;
+                });
+        }
+        
+        // تایید انتخاب
+        function confirmSelection() {
+            if (selectedLatLng) {
+                // ارسال داده به ربات تلگرام
+                if (window.Telegram && window.Telegram.WebApp) {
+                    const data = {
+                        lat: selectedLatLng.lat,
+                        lng: selectedLatLng.lng,
+                        address: selectedAddress
+                    };
+                    window.Telegram.WebApp.sendData(JSON.stringify(data));
+                    window.Telegram.WebApp.close();
+                } else {
+                    // برای تست در مرورگر
+                    alert(`موقعیت انتخاب شد:\n${selectedAddress}\n(${selectedLatLng.lat}, ${selectedLatLng.lng})`);
+                }
+            }
+        }
+        
+        // انصراف
+        function cancelSelection() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.close();
+            } else {
+                alert('عملیات لغو شد');
+            }
+        }
+        
+        // مقداردهی اولیه وقتی صفحه لود شد
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            
+            // تنظیم حالت Telegram Web App
+            if (window.Telegram && window.Telegram.WebApp) {
+                Telegram.WebApp.expand();
+                Telegram.WebApp.enableClosingConfirmation();
+                
+                // تنظیم instruction بر اساس نوع موقعیت
+                const urlParams = new URLSearchParams(window.location.search);
+                const type = urlParams.get('type');
+                if (type === 'pickup') {
+                    document.getElementById('page-title').textContent = '📍 انتخاب مبدا روی نقشه';
+                    document.getElementById('instruction').textContent = 'مبدا سفر را روی نقشه انتخاب کنید';
+                    document.getElementById('instruction-box').textContent = '✨ مبدا سفر را روی نقشه انتخاب کنید';
+                } else if (type === 'destination') {
+                    document.getElementById('page-title').textContent = '🎯 انتخاب مقصد روی نقشه';
+                    document.getElementById('instruction').textContent = 'مقصد سفر را روی نقشه انتخاب کنید';
+                    document.getElementById('instruction-box').textContent = '✨ مقصد سفر را روی نقشه انتخاب کنید';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
